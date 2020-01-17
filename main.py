@@ -1,146 +1,79 @@
-import configparser
-import select
 import socket
+import struct
 
-INFINIT = 16
+#########------------------Pachet RIP---------------###########
+class pachetRip:
+    def __init__(self):
+        self.command = b'\x00'
+        self.version = b'\x02'
+        self.addrFam = b'\x00\x02'
+        self.routeTag = b'\x00\x00'
+        self.ipAddress = b'\x00\x00\x00\x00'
+        self.netMask = b'\x00\x00\x00\x00'
+        self.nextHop = b'\x00\x00\x00\x00'
+        self.metric = b'\x00\x00\x00\x00'
 
+        self.pachet = b''
 
-class State():
-    def __init__(self, fsm):
-        self.fsm = fsm
+    def packet(self):
+        self.pachet += (self.command[0:1] +
+                      self.version[0:1] +
+                      self.addrFam[0:2] +
+                      self.routeTag[0:2] +
+                      self.ipAddress[0:4] +
+                      self.netMask[0:4] +
+                      self.nextHop[0:4] +
+                      self.metric[0:4])
 
-    def enter(self):
-        pass
-
-    def execute(self):
-        pass
-
-    def exit(self):
-        pass
-
-
-class Transistion():
-    def __init__(self, to_state):
-        self.to_state = to_state
-
-    def execute(self):
-        pass
-
-
-class StartUp(State):
-    def __init__(self, fsm):
-        super(StartUp, self).__init__(fsm)
-
-    def execute(self):
-        print_message("Citire fisier configuratie: " + self.fsm.router.config_file)
-        config = configparser.ConfigParser()
-        config.read(self.fsm.router.config_file)
-
-        self.get_router_id(config)
-        self.setup_inputs(config)
-        self.get_outputs(config)
-        self.get_ip_addr(config)
-
-        self.fsm.to_transition("toWaiting")
-
-    def exit(self):
-        print_message("Router setup complet.")
-
-    def get_router_id(self, config):
-        self.fsm.router.router_settings['id'] = int(config['router-id'])
-
-    def get_outputs(self, config):
-        outputs = config['outputs'].split(', ')
-        outputs = [i.split('-') for i in outputs]
-
-        self.fsm.router.router_settings['outputs'] = {}
-        existing_ports = []
-        ip_addrs = []
-
-        for output in outputs:
-            existing_ports.append(int(output[0]))
-            ip_addrs.append
-            self.fsm.router.router_settings['outputs'][int(output[2])] = {'metric': int(output[1]), 'port': int(output[0])}
+    #transform adresa in int
+    def toInt(self, ip):
+        v = ip.split('.')
+        for i in range(0, len(v)):
+            v[i] = int(v[i])
+        return struct.pack("BBBB", v[0], v[1], v[2], v[3])
 
 
-    def setup_inputs(self, config):
-        ports = config['input-ports'].split(', ')
+    def addEntry(self, ip, masca):
+        self.pachet += (self.addrFam[0:2] +
+                        self.routeTag[0:2] +
+                        self.toInt(ip) +
+                        self.toInt(masca) +
+                        self.nextHop[0:4] +
+                        self.metric[0:4])
 
-        inputs = []
-        for port in ports:
-                inputs.append(int(port))
+    def setIp(self, ip):
+        self.ipAdress = self.toInt(ip)
 
-        self.fsm.router.router_settings['inputs'] = {}
-        for port in inputs:
-            self.fsm.router.router_settings['inputs'][port] = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            self.fsm.router.router_settings['inputs'][port].bind((, port))
+    def setMasca(self, masca):
+        self.netMask = self.toInt(masca)
 
+def Send(self, udp_ip, udp_port):
+    grp= (udp_ip, udp_port)
 
-class Waiting(State):
-    def __init__(self, fsm):
-        super(Waiting, self).__init__(fsm)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.connect(grp)
 
-    def enter(self):
-        print_message("Intrare in starea de asteptare...")
+    sock.send(self.pachet, grp)
 
-    def execute(self):
-        readable = select.select(
-            self.fsm.router.router_settings['inputs'].values(), [], [])
+    sock.close()
 
-        if readable[0]:
-            self.fsm.router.readable_ports = readable[0]
-            self.fsm.to_transition("toReadMessage")
-
-    def exit(self):
-        print_message("Mesaj primit.")
-
-
-class ReadMessage(State):
-
-    def __init__(self, fsm):
-        super(ReadMessage, self).__init__(fsm)
-
-    def enter(self):
-        print_message("Citire mesaje...")
-
-    def execute(self):
-
-        for port in self.fsm.router.readable_ports:
-            pachet = RIPPacket(port.recvfrom(1024)[0])
-
-        self.fsm.router.print_routing_table()
-        self.fsm.to_transition("toWaiting")
-
-    def exit(self):
-        print_message("Mesaj citit.")
-
-
-class RIPPacket:
-    '''def __init__(self, data, header):'''
+def receive(self, udp_ip, udp_port):
+    format=''
+    grp= (udp_ip, udp_port)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(grp)
+    message, address = sock.recv(1024)
+    #message
+    sock.close()
 
 
 
-class Router:
+ip1 = '192.168.1.1'
+port1 = 12001
+ip2 = '192.168.2.1'
+port2 = 12002
 
-    def print_routing_table(self):
-        line = "+-----------+----------+-----------+"
-        print(line)
-        print("Routing Table   (Router "+ str(self.router_settings['id']) + ")")
-        print(line)
-        print(
-            "|Router ID  |  Metric  |  NextHop  |")
-        print(line)
+ob = pachetRip()
+ob.setIp('192.168.2.1')
+ob.setMasca('255.255.255.0')
 
-        print(self.routing_table[self.router_settings['id']])
-
-        print("+===========+==========+===========+")
-
-        for entry in self.routing_table:
-            if entry != self.router_settings['id']:
-                print(self.routing_table[entry])
-                print(line)
-        print('\n')
-
-
-def print_message(message):
-    print(message)
